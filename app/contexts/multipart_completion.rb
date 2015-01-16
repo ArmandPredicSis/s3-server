@@ -1,0 +1,30 @@
+class MultipartCompletion
+  def self.call(s3_object, req_body)
+    MultipartCompletion.new(s3_object, req_body).call
+  end
+
+  def initialize(s3_object, req_body)
+    @s3_object = s3_object
+    @req_body = req_body
+  end
+
+  def call
+    dir = File.join('tmp', 'multiparts', "s3o_#{@s3_object.id}")
+    parts = Hash.from_xml(@req_body.read)['CompleteMultipartUpload']['Part']
+
+    # Fetch parts
+    parts.each do |part|
+      path = File.join(dir, "part_#{part['PartNumber']}.raw")
+      File.open(File.join(dir, 'complete.raw'), 'ab') do |final_file|
+        final_file << File.read(path)
+      end
+    end
+
+    @s3_object.assign_attributes(
+      file: File.open(File.join(dir, 'complete.raw')), size: File.size(s3o.file.path),
+      md5: Digest::MD5.file(s3o.file.path).hexdigest)
+
+    # Remove tmp folder
+    FileUtils.rm_r(dir)
+  end
+end
